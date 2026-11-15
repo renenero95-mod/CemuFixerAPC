@@ -25,6 +25,7 @@ while IFS=$'\t' read -r path url commit; do
     git -C "$dest" fetch --no-tags origin "$commit"
   fi
   git -C "$dest" checkout --detach "$commit"
+  git -C "$dest" submodule update --init --recursive
   actual="$(git -C "$dest" rev-parse HEAD)"
   [[ "$actual" == "$commit" ]] || {
     echo "Commit errato per $path: $actual (atteso $commit)" >&2
