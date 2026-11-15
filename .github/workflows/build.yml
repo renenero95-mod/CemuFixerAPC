@@ -277,6 +277,9 @@ jobs:
           submodules: "recursive"
           fetch-depth: 0
 
+      - name: Fetch pinned submodules
+        run: bash scripts/fetch_submodules.sh
+
       - name: Install system dependencies
         run: |
           sudo apt update -qq
