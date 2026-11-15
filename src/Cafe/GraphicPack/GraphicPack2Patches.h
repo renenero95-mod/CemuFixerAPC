@@ -225,8 +225,6 @@ class PatchGroup
 	friend class GraphicPack2;
 
 public:
-	static constexpr uint32 CODECAVE_MAX_OFFSET = 8 * 1024 * 1024;
-
 	PatchGroup(class GraphicPack2* gp, const char* nameStr, sint32 nameLength) : graphicPack(gp)
 	{
 		name = std::string(nameStr, nameLength);

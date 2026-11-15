@@ -168,11 +168,11 @@ void LatteIndices_convertLE(const void* indexDataInput, void* indexDataOutput, u
 	}
 }
 
-template<typename T, typename TInput>
+template<typename T>
 void LatteIndices_unpackQuadsAndConvert(const void* indexDataInput, void* indexDataOutput, uint32 count, uint32& indexMax)
 {
 	sint32 numQuads = count / 4;
-	const TInput* src = (const TInput*)indexDataInput;
+	const betype<T>* src = (betype<T>*)indexDataInput;
 	T* dst = (T*)indexDataOutput;
 	for (sint32 i = 0; i < numQuads; i++)
 	{
@@ -219,13 +219,13 @@ void LatteIndices_generateAutoQuadIndices(const void* indexDataInput, void* inde
 	indexMax = std::max(count, 1u) - 1;
 }
 
-template<typename T, typename TInput>
+template<typename T>
 void LatteIndices_unpackQuadStripAndConvert(const void* indexDataInput, void* indexDataOutput, uint32 count, uint32& indexMax)
 {
 	if (count <= 3)
 		return;
 	sint32 numQuads = (count - 2) / 2;
-	const TInput* src = (const TInput*)indexDataInput;
+	const betype<T>* src = (betype<T>*)indexDataInput;
 	T* dst = (T*)indexDataOutput;
 	for (sint32 i = 0; i < numQuads; i++)
 	{
@@ -248,12 +248,12 @@ void LatteIndices_unpackQuadStripAndConvert(const void* indexDataInput, void* in
 	}
 }
 
-template<typename T, typename TInput>
+template<typename T>
 void LatteIndices_unpackLineLoopAndConvert(const void* indexDataInput, void* indexDataOutput, uint32 count, uint32& indexMax)
 {
 	if (count <= 0)
 		return;
-	const TInput* src = (const TInput*)indexDataInput;
+	const betype<T>* src = (betype<T>*)indexDataInput;
 	T firstIndex = *src;
 	T* dst = (T*)indexDataOutput;
 	for (sint32 i = 0; i < (sint32)count; i++)
@@ -308,10 +308,10 @@ void LatteIndices_generateAutoLineLoopIndices(void* indexDataOutput, uint32 coun
 	indexMax = std::max(count, 1u) - 1;
 }
 
-template<typename T, typename TInput>
+template<typename T>
 void LatteIndices_unpackTriangleFanAndConvert(const void* indexDataInput, void* indexDataOutput, uint32 count, uint32& indexMax)
 {
-	const TInput* src = (const TInput*)indexDataInput;
+	const betype<T>* src = (betype<T>*)indexDataInput;
 	T* dst = (T*)indexDataOutput;
 	// TODO: check this
 	for (sint32 i = 0; i < count; i++)
@@ -598,12 +598,12 @@ void LatteIndices_fastConvertU32_NEON(const void* indexDataInput, void* indexDat
 
 #endif
 
-template<typename T, typename TInput>
+template<typename T>
 void _LatteIndices_alternativeCalculateIndexMax(const void* indexData, uint32 count, uint32 primitiveRestartIndex, uint32& indexMax)
 {
 	cemu_assert_debug(count != 0);
-	const TInput* idxPtrT = (const TInput*)indexData;
-	T _indexMax = 0;
+	const betype<T>* idxPtrT = (betype<T>*)indexData;
+	T _indexMax = *idxPtrT;
 	cemu_assert_debug(primitiveRestartIndex <= std::numeric_limits<T>::max());
 	T restartIndexT = (T)primitiveRestartIndex;
 	while (count)
@@ -632,19 +632,11 @@ void LatteIndices_alternativeCalculateIndexMax(const void* indexData, LatteIndex
 
 	if (indexType == LatteIndexType::U16_BE)
 	{
-		_LatteIndices_alternativeCalculateIndexMax<uint16, uint16be>(indexData, count, primitiveRestartIndex, indexMax);
+		_LatteIndices_alternativeCalculateIndexMax<uint16>(indexData, count, primitiveRestartIndex, indexMax);
 	}
 	else if (indexType == LatteIndexType::U32_BE)
 	{
-		_LatteIndices_alternativeCalculateIndexMax<uint32, uint32be>(indexData, count, primitiveRestartIndex, indexMax);
-	}
-	else if (indexType == LatteIndexType::U16_LE)
-	{
-		_LatteIndices_alternativeCalculateIndexMax<uint16, uint16>(indexData, count, primitiveRestartIndex, indexMax);
-	}
-	else if (indexType == LatteIndexType::U32_LE)
-	{
-		_LatteIndices_alternativeCalculateIndexMax<uint32, uint32>(indexData, count, primitiveRestartIndex, indexMax);
+		_LatteIndices_alternativeCalculateIndexMax<uint32>(indexData, count, primitiveRestartIndex, indexMax);
 	}
 	else
 	{
@@ -681,7 +673,7 @@ void LatteIndices_decode(const void* indexData, LatteIndexType indexType, uint32
 		renderIndexType = Renderer::INDEX_TYPE::NONE;
 	else if (indexType == LatteIndexType::U16_BE || indexType == LatteIndexType::U16_LE)
 		renderIndexType = Renderer::INDEX_TYPE::U16;
-	else if (indexType == LatteIndexType::U32_BE || indexType == LatteIndexType::U32_LE)
+	else if (indexType == LatteIndexType::U32_BE)
 		renderIndexType = Renderer::INDEX_TYPE::U32;
 	else
 		cemu_assert_debug(false);
@@ -721,13 +713,9 @@ void LatteIndices_decode(const void* indexData, LatteIndexType indexType, uint32
 			}
 		}
 		else if (indexType == LatteIndexType::U16_BE)
-			LatteIndices_unpackQuadsAndConvert<uint16, uint16be>(indexData, indexOutputPtr, count, indexMax);
+			LatteIndices_unpackQuadsAndConvert<uint16>(indexData, indexOutputPtr, count, indexMax);
 		else if (indexType == LatteIndexType::U32_BE)
-			LatteIndices_unpackQuadsAndConvert<uint32, uint32be>(indexData, indexOutputPtr, count, indexMax);
-		else if (indexType == LatteIndexType::U16_LE)
-			LatteIndices_unpackQuadsAndConvert<uint16, uint16>(indexData, indexOutputPtr, count, indexMax);
-		else if (indexType == LatteIndexType::U32_LE)
-			LatteIndices_unpackQuadsAndConvert<uint32, uint32>(indexData, indexOutputPtr, count, indexMax);
+			LatteIndices_unpackQuadsAndConvert<uint32>(indexData, indexOutputPtr, count, indexMax);
 		else
 			cemu_assert_debug(false);
 		outputCount = count / 4 * 6;
@@ -749,13 +737,9 @@ void LatteIndices_decode(const void* indexData, LatteIndexType indexType, uint32
 			}
 		}
 		else if (indexType == LatteIndexType::U16_BE)
-			LatteIndices_unpackQuadStripAndConvert<uint16, uint16be>(indexData, indexOutputPtr, count, indexMax);
+			LatteIndices_unpackQuadStripAndConvert<uint16>(indexData, indexOutputPtr, count, indexMax);
 		else if (indexType == LatteIndexType::U32_BE)
-			LatteIndices_unpackQuadStripAndConvert<uint32, uint32be>(indexData, indexOutputPtr, count, indexMax);
-		else if (indexType == LatteIndexType::U16_LE)
-			LatteIndices_unpackQuadStripAndConvert<uint16, uint16>(indexData, indexOutputPtr, count, indexMax);
-		else if (indexType == LatteIndexType::U32_LE)
-			LatteIndices_unpackQuadStripAndConvert<uint32, uint32>(indexData, indexOutputPtr, count, indexMax);
+			LatteIndices_unpackQuadStripAndConvert<uint32>(indexData, indexOutputPtr, count, indexMax);
 		else
 			cemu_assert_debug(false);
 		if (count >= 2)
@@ -780,13 +764,9 @@ void LatteIndices_decode(const void* indexData, LatteIndexType indexType, uint32
 			}
 		}
 		else if (indexType == LatteIndexType::U16_BE)
-			LatteIndices_unpackLineLoopAndConvert<uint16, uint16be>(indexData, indexOutputPtr, count, indexMax);
+			LatteIndices_unpackLineLoopAndConvert<uint16>(indexData, indexOutputPtr, count, indexMax);
 		else if (indexType == LatteIndexType::U32_BE)
-			LatteIndices_unpackLineLoopAndConvert<uint32, uint32be>(indexData, indexOutputPtr, count, indexMax);
-		else if (indexType == LatteIndexType::U16_LE)
-			LatteIndices_unpackLineLoopAndConvert<uint16, uint16>(indexData, indexOutputPtr, count, indexMax);
-		else if (indexType == LatteIndexType::U32_LE)
-			LatteIndices_unpackLineLoopAndConvert<uint32, uint32>(indexData, indexOutputPtr, count, indexMax);
+			LatteIndices_unpackLineLoopAndConvert<uint32>(indexData, indexOutputPtr, count, indexMax);
 		else
 			cemu_assert_debug(false);
 		outputCount = count + 1;
@@ -807,13 +787,9 @@ void LatteIndices_decode(const void* indexData, LatteIndexType indexType, uint32
     		}
     	}
     	else if (indexType == LatteIndexType::U16_BE)
-			LatteIndices_unpackTriangleFanAndConvert<uint16, uint16be>(indexData, indexOutputPtr, count, indexMax);
+    		LatteIndices_unpackTriangleFanAndConvert<uint16>(indexData, indexOutputPtr, count, indexMax);
     	else if (indexType == LatteIndexType::U32_BE)
-			LatteIndices_unpackTriangleFanAndConvert<uint32, uint32be>(indexData, indexOutputPtr, count, indexMax);
-		else if (indexType == LatteIndexType::U16_LE)
-			LatteIndices_unpackTriangleFanAndConvert<uint16, uint16>(indexData, indexOutputPtr, count, indexMax);
-		else if (indexType == LatteIndexType::U32_LE)
-			LatteIndices_unpackTriangleFanAndConvert<uint32, uint32>(indexData, indexOutputPtr, count, indexMax);
+    		LatteIndices_unpackTriangleFanAndConvert<uint32>(indexData, indexOutputPtr, count, indexMax);
     	else
     		cemu_assert_debug(false);
     	outputCount = count;

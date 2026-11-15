@@ -1,5 +1,6 @@
 #include "Cafe/OS/common/OSCommon.h"
 #include "WindowSystem.h"
+#include "Cafe/OS/libs/gx2/GX2.h"
 #include "Cafe/GameProfile/GameProfile.h"
 #include "Cafe/HW/Espresso/Interpreter/PPCInterpreterInternal.h"
 #include "Cafe/HW/Espresso/Recompiler/PPCRecompiler.h"
@@ -18,7 +19,6 @@
 #include "Cafe/TitleList/TitleList.h"
 #include "Cafe/TitleList/GameInfo.h"
 #include "Cafe/OS/libs/coreinit/coreinit_Alarm.h"
-#include "Cafe/OS/libs/coreinit/coreinit_IPC.h"
 #include "Cafe/OS/libs/snd_core/ax.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
@@ -27,7 +27,6 @@
 #include "GamePatch.h"
 #include "HW/Espresso/Debugger/GDBStub.h"
 
-#include "Common/CafeStaticVar.h"
 #include "Cafe/IOSU/legacy/iosu_ioctl.h"
 #include "Cafe/IOSU/legacy/iosu_act.h"
 #include "Cafe/IOSU/legacy/iosu_fpd.h"
@@ -73,6 +72,10 @@
 #elif BOOST_OS_MACOS || BOOST_OS_BSD
 #include <sys/types.h>
 #include <sys/sysctl.h>
+#endif
+
+#if BOOST_PLAT_ANDROID
+#include <android/api-level.h>
 #endif
 
 std::string _pathToExecutable;
@@ -191,6 +194,7 @@ void LoadMainExecutable()
 		currentBaseApplicationHash = generateHashFromRawRPXData(baseRpxData, baseRpxSize);
 	}
 	free(baseRpxData);
+	debug_printf("RPXHash: 0x%08x\n", currentBaseApplicationHash);
 }
 
 fs::path getTitleSavePath()
@@ -448,6 +452,8 @@ namespace CafeSystem
 	bool sSystemRunning = false;
 	TitleId sForegroundTitleId = 0;
 
+	bool sTitlePaused = false;
+
 	GameInfo2 sGameInfo_ForegroundTitle;
 
 
@@ -544,7 +550,10 @@ namespace CafeSystem
 	{
 		std::string buffer;
 		const char* platform = NULL;
-		#if BOOST_OS_WINDOWS
+		#if BOOST_PLAT_ANDROID
+		buffer = fmt::format("Android (API level {})", android_get_device_api_level());
+		platform = buffer.c_str();
+		#elif BOOST_OS_WINDOWS
 		uint32 buildNumber;
 		std::string windowsVersionName = GetWindowsNamedVersion(buildNumber);
 		buffer = fmt::format("{} (Build {})", windowsVersionName, buildNumber);
@@ -554,9 +563,8 @@ namespace CafeSystem
 			platform = "Linux (AppImage)";
 		else if (getenv ("SNAP"))
 			platform = "Linux (Snap)";
-		else if (getenv ("container"))
+		else if (platform = getenv ("container"))
 		{
-			platform = getenv ("container");
 			if (strcmp (platform, "flatpak") == 0)
 				platform = "Linux (Flatpak)";
 		}
@@ -626,6 +634,9 @@ namespace CafeSystem
 		cemuLog_log(LogType::Force, "Used CPU extensions: {}", g_CPUFeatures.GetCommaSeparatedExtensionList());
 		// misc systems
 		rplSymbolStorage_init();
+		// allocate memory for all SysAllocators
+		// must happen before COS module init, but also before iosu::kernel::Initialize()
+		SysAllocatorContainer::GetInstance().Initialize();
 		// init IOSU modules
 		for(auto& module : s_iosuModules)
 			module->SystemLaunch();
@@ -663,7 +674,6 @@ namespace CafeSystem
 		// shutdown IOSU modules
 		for(auto it = s_iosuModules.rbegin(); it != s_iosuModules.rend(); ++it)
 			(*it)->SystemExit();
-		cemu_assert_debug(!IOSUStaticData::HasAnyAllocations()); // check for leak
         s_initialized = false;
     }
 
@@ -870,10 +880,10 @@ namespace CafeSystem
 			// check for content folder
 			fs::path contentPath = executablePath.parent_path().parent_path().append("content");
 			std::error_code ec;
-			if (fs::is_directory(contentPath, ec))
+			if (cemu::fs::is_directory(contentPath, ec))
 			{
 				// mounting content folder
-				bool r = FSCDeviceHostFS_Mount(std::string("/vol/content").c_str(), _pathToUtf8(contentPath), FSC_PRIORITY_BASE);
+				bool r = FSCDeviceHost_Mount("/vol/content", _pathToUtf8(contentPath), FSC_PRIORITY_BASE);
 				if (!r)
 				{
 					cemuLog_log(LogType::Force, "Failed to mount {}", _pathToUtf8(contentPath));
@@ -882,7 +892,7 @@ namespace CafeSystem
 			}
 		}
 		// mount code folder to a virtual temporary path
-		FSCDeviceHostFS_Mount(std::string("/internal/code/").c_str(), _pathToUtf8(executablePath.parent_path()), FSC_PRIORITY_BASE);
+		FSCDeviceHost_Mount("/internal/code/", _pathToUtf8(executablePath.parent_path()), FSC_PRIORITY_BASE);
 		std::string internalExecutablePath = "/internal/code/";
 		internalExecutablePath.append(_pathToUtf8(executablePath.filename()));
 		_pathToExecutable = internalExecutablePath;
@@ -928,6 +938,30 @@ namespace CafeSystem
 	bool IsTitleRunning()
 	{
 		return sSystemRunning;
+	}
+
+	void PauseTitle()
+	{
+		if (!sSystemRunning || sTitlePaused)
+		{
+			return;
+		}
+
+		sTitlePaused = true;
+
+		coreinit::SuspendActiveThreads();
+	}
+
+	void ResumeTitle()
+	{
+		if (!sSystemRunning || !sTitlePaused)
+		{
+			return;
+		}
+
+		sTitlePaused = false;
+
+		coreinit::ResumeActiveThreads();
 	}
 
 	TitleId GetForegroundTitleId()
@@ -1068,7 +1102,6 @@ namespace CafeSystem
 			return;
 		coreinit::OSSchedulerEnd();
 		Latte_Stop();
-		coreinit::IPCCloseAllHandles();
 		// reset Cafe OS userspace modules
 		snd_core::reset();
 		coreinit::OSAlarm_Shutdown();
@@ -1199,45 +1232,4 @@ namespace CafeSystem
 		return s_foregroundReturnStatus;
 	}
 
-
-	void DumpCurrentRPX()
-	{
-		if (!IsTitleRunning() || _pathToExecutable.empty())
-			return;
-		const fs::path dumpDirectory = ActiveSettings::GetUserDataPath("dump/rpx/{:016x}", GetForegroundTitleId());
-		std::error_code ec;
-		fs::create_directories(dumpDirectory, ec);
-		if (ec)
-		{
-			cemuLog_log(LogType::Force, "Failed to create RPX dump directory \"{}\": {}", _pathToUtf8(dumpDirectory), ec.message());
-			return;
-		}
-		auto dumpFile = [&dumpDirectory](const std::string& sourcePath)
-		{
-			auto fileData = fsc_extractFile(sourcePath.c_str());
-			if (!fileData)
-				return;
-			FileStream* fs = FileStream::createFile2(dumpDirectory / _utf8ToPath(sourcePath).filename());
-			if (!fs)
-				return;
-			fs->writeData(fileData->data(), (sint32)fileData->size());
-			delete fs;
-		};
-		// dump RPX
-		dumpFile(_pathToExecutable);
-		// dump RPLs
-		const std::string codeDirectory = _pathToExecutable.substr(0, _pathToExecutable.find_last_of('/') + 1);
-		sint32 fscStatus;
-		FSCVirtualFile* dirIterator = fsc_openDirIterator(codeDirectory.c_str(), &fscStatus);
-		if (dirIterator)
-		{
-			FSCDirEntry dirEntry;
-			while (fsc_nextDir(dirIterator, &dirEntry))
-			{
-				if (dirEntry.isFile && boost::iends_with(dirEntry.path, ".rpl"))
-					dumpFile(codeDirectory + dirEntry.path);
-			}
-			fsc_close(dirIterator);
-		}
-	}
 }

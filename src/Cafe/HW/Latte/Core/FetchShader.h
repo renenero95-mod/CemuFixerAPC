@@ -1,35 +1,33 @@
 #pragma once
 #include "Cafe/HW/Latte/Core/LatteConst.h"
 
-struct LatteParsedFetchShaderAttribute
+struct LatteParsedFetchShaderAttribute_t
 {
-	uint8								attributeBufferIndex;
-	uint8								semanticId;
-	Latte::E_HWFMT						format;
-	LatteConst::VertexFetchType2		fetchType;
-	uint8								nfa;
-	uint8								isSigned;
-	sint8								stepRateRegIndex; // -1 -> divisor 1, 0 -> VGT_INSTANCE_STEP_RATE_0, 1 -> VGT_INSTANCE_STEP_RATE_1
+	uint8					semanticId;
+	uint8					format;
+	LatteConst::VertexFetchType2	fetchType;
+	uint8					nfa;
+	uint8					isSigned;
 	LatteConst::VertexFetchEndianMode	endianSwap;
-	uint8								ds[4]; // destination component select
-	sint32								aluDivisor;
-	uint32								offset;
-
-	uint32 GetInstanceDivisor(const uint32* contextRegisters)
-	{
-		return stepRateRegIndex < 0 ? 1 : contextRegisters[Latte::REGADDR::VGT_INSTANCE_STEP_RATE_0 + stepRateRegIndex];
-	}
+	uint8					ds[4]; // destination component select
+	sint32					aluDivisor;
+	uint32					offset;
+	uint32					attributeBufferIndex;
 };
 
-struct LatteParsedFetchShaderBufferGroup
+struct LatteParsedFetchShaderBufferGroup_t
 {
-	uint8 attributeBufferIndex{}; // index of buffer (0 to 15 are valid)
-	sint8 attribCount{};
-	bool hasVtxIndexAccess : 1;
-	bool hasInstanceIndexAccess : 1;
+	uint32 attributeBufferIndex{}; // index of buffer (0 to 15 are valid)
+	LatteParsedFetchShaderAttribute_t* attrib{}; // attributes for this buffer
+	sint32 attribCount{};
+	// offset range of attributes
 	uint32 minOffset{};
-	uint32 totalAttribRangeSize{}; // max attribOffset+attribSize
-	LatteParsedFetchShaderAttribute* attrib{}; // attributes for this buffer
+	uint32 maxOffset{};
+	// output
+	uint32  vboStride{};
+	// calculated info
+	bool hasVtxIndexAccess{};
+	bool hasInstanceIndexAccess{};
 
 	uint32 getCurrentBufferStride(uint32* contextRegister) const;
 };
@@ -40,12 +38,11 @@ struct LatteFetchShader
 
 	~LatteFetchShader();
 
-	std::vector<LatteParsedFetchShaderBufferGroup> bufferGroups;
-	std::vector<LatteParsedFetchShaderBufferGroup> bufferGroupsInvalid; // groups with buffer index not being a valid buffer (dst components of these can affect shader code, but no actual vertex imports are done)
+	std::vector<LatteParsedFetchShaderBufferGroup_t> bufferGroups;
+	std::vector<LatteParsedFetchShaderBufferGroup_t> bufferGroupsInvalid; // groups with buffer index not being a valid buffer (dst components of these can affect shader code, but no actual vertex imports are done)
 
 	uint64 key{};
 	uint32 attributeBufferMask{}; // mask of buffers sourced by this fetch shader
-	uint8 stepRateRegMask{}; // bit 0: VGT_INSTANCE_STEP_RATE_0 used, bit 1: VGT_INSTANCE_STEP_RATE_1 used
 
 	// Vulkan
 	uint64 vkPipelineHashFragment{}; // hash of all fetch shader state that influences the Vulkan graphics pipeline

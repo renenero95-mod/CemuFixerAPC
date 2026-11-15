@@ -46,6 +46,10 @@ InputManager::InputManager()
 #if HAS_WIIMOTE
 	create_provider<WiimoteControllerProvider>();
 #endif
+#if BOOST_PLAT_ANDROID
+	create_provider<AndroidControllerProvider>();
+	create_provider<DeviceControllerProvider>();
+#endif
 
 	m_update_thread_shutdown.store(false);
 	m_update_thread = std::thread(&InputManager::update_thread, this);
@@ -678,12 +682,9 @@ EmulatedControllerPtr InputManager::delete_controller(size_t player_index, bool 
 		{
 			controller = {};
 
-			if(delete_profile)
-			{
-				std::error_code ec{};
-				fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.xml", player_index), ec);
-				fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.txt", player_index), ec);
-			}
+			std::error_code ec{};
+			fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.xml", player_index), ec);
+			fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.txt", player_index), ec);
 
 			return result;
 		}
@@ -764,7 +765,7 @@ ControllerProviderPtr InputManager::get_api_provider(InputAPI::Type api, const C
 
 void InputManager::apply_game_profile()
 {
-	const auto& profiles = g_current_game_profile->GetControllerProfile();
+	const auto& profiles = g_current_game_profile->GetControllerProfiles();
 	for (int i = 0; i < kMaxController; ++i)
 	{
 		if (profiles[i] && !profiles[i]->empty())
@@ -843,7 +844,7 @@ std::optional<glm::ivec2> InputManager::get_left_down_mouse_info(bool* is_pad)
 		*is_pad = false;
 
 	{
-		std::unique_lock lock(m_main_mouse.m_mutex);
+		std::shared_lock lock(m_main_mouse.m_mutex);
 		if (std::exchange(m_main_mouse.left_down_toggle, false))
 			return m_main_mouse.position;
 
@@ -852,7 +853,7 @@ std::optional<glm::ivec2> InputManager::get_left_down_mouse_info(bool* is_pad)
 	}
 
 	{
-		std::unique_lock lock(m_main_touch.m_mutex);
+		std::shared_lock lock(m_main_touch.m_mutex);
 		if (std::exchange(m_main_touch.left_down_toggle, false))
 			return m_main_touch.position;
 
@@ -864,7 +865,7 @@ std::optional<glm::ivec2> InputManager::get_left_down_mouse_info(bool* is_pad)
 		*is_pad = true;
 
 	{
-		std::unique_lock lock(m_pad_mouse.m_mutex);
+		std::shared_lock lock(m_pad_mouse.m_mutex);
 		if (std::exchange(m_pad_mouse.left_down_toggle, false))
 			return m_pad_mouse.position;
 
@@ -873,7 +874,7 @@ std::optional<glm::ivec2> InputManager::get_left_down_mouse_info(bool* is_pad)
 	}
 
 	{
-		std::unique_lock lock(m_pad_touch.m_mutex);
+		std::shared_lock lock(m_pad_touch.m_mutex);
 		if (std::exchange(m_pad_touch.left_down_toggle, false))
 			return m_pad_touch.position;
 
@@ -890,7 +891,7 @@ std::optional<glm::ivec2> InputManager::get_right_down_mouse_info(bool* is_pad)
 		*is_pad = false;
 
 	{
-		std::unique_lock lock(m_main_mouse.m_mutex);
+		std::shared_lock lock(m_main_mouse.m_mutex);
 		if (std::exchange(m_main_mouse.right_down_toggle, false))
 			return m_main_mouse.position;
 
@@ -899,7 +900,7 @@ std::optional<glm::ivec2> InputManager::get_right_down_mouse_info(bool* is_pad)
 	}
 
 	{
-		std::unique_lock lock(m_main_touch.m_mutex);
+		std::shared_lock lock(m_main_touch.m_mutex);
 		if (std::exchange(m_main_touch.right_down_toggle, false))
 			return m_main_touch.position;
 
@@ -911,7 +912,7 @@ std::optional<glm::ivec2> InputManager::get_right_down_mouse_info(bool* is_pad)
 		*is_pad = true;
 
 	{
-		std::unique_lock lock(m_pad_mouse.m_mutex);
+		std::shared_lock lock(m_pad_mouse.m_mutex);
 		if (std::exchange(m_pad_mouse.right_down_toggle, false))
 			return m_pad_mouse.position;
 
@@ -920,7 +921,7 @@ std::optional<glm::ivec2> InputManager::get_right_down_mouse_info(bool* is_pad)
 	}
 
 	{
-		std::unique_lock lock(m_pad_touch.m_mutex);
+		std::shared_lock lock(m_pad_touch.m_mutex);
 		if (std::exchange(m_pad_touch.right_down_toggle, false))
 			return m_pad_touch.position;
 

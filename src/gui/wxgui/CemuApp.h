@@ -23,8 +23,6 @@ public:
 
 	static void InitializeNewMLCOrFail(fs::path mlc);
 	static void InitializeExistingMLCOrFail(fs::path mlc);
-
-	void RequestRestart(fs::path executablePath);
 private:
 	void LocalizeUI(wxLanguage languageToUse);
 
@@ -41,7 +39,6 @@ private:
 
 	wxLocale m_locale;
 	std::vector<const wxLanguageInfo*> m_availableTranslations;
-	std::optional<fs::path> m_restartExecutable;
 };
 
 wxDECLARE_APP(CemuApp);

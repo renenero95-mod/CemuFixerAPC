@@ -160,7 +160,6 @@ private:
 
 	DisasmCtrl* m_disasm_ctrl;
 
-	void UpdateAppearance();
 	wxToolBar* m_toolbar;
 	wxBitmap m_run, m_pause;
 

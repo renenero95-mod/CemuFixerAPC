@@ -80,8 +80,9 @@ void ModuleWindow::OnGameLoaded()
 
 	m_modules->DeleteAllItems();
 
+	const auto module_count = RPLLoader_GetModuleCount();
 	const auto module_list = RPLLoader_GetModuleList();
-	for (size_t i = 0; i < module_list.size(); i++)
+	for (int i = 0; i < module_count; i++)
 	{
 		const auto module = module_list[i];
 		if (module)
@@ -104,7 +105,7 @@ void ModuleWindow::OnGameLoaded()
 			if (patch_group->isApplied())
 			{
 				wxListItem item;
-				item.SetId(module_list.size() + patch_count);
+				item.SetId(module_count + patch_count);
 				item.SetText(std::string(patch_group->getName()));
 
 				const auto index = m_modules->InsertItem(item);

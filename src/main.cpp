@@ -26,7 +26,6 @@
 #include "audio/IAudioAPI.h"
 #include "audio/IAudioInputAPI.h"
 #if BOOST_OS_WINDOWS
-#include <WinSock2.h>
 #pragma comment(lib,"Dbghelp.lib")
 #endif
 
@@ -107,7 +106,7 @@ void WindowsInitCwd()
 		executablePath.resize(i);
 	else
 		executablePath.clear();
-	SetCurrentDirectoryW(fs::path(executablePath).parent_path().c_str());
+	SetCurrentDirectoryW(executablePath.c_str());
 	// set high priority
 	SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
 	#endif
@@ -125,11 +124,6 @@ void CemuCommonInit()
 
 	WindowsInitCwd();
     ExceptionHandler_Init();
-#if BOOST_OS_WINDOWS
-	// init sockets
-	WSADATA wsaData;
-	WSAStartup(MAKEWORD(2, 2), &wsaData);
-#endif
 	// read config
 	GetConfigHandle().Load();
 	if (NetworkConfig::XMLExists())
@@ -204,18 +198,35 @@ void requireConsole()
 
 void HandlePostUpdate()
 {
-	auto exeBackupPath = ActiveSettings::GetExecutablePath();
-	exeBackupPath.replace_extension( _utf8ToPath(_pathToUtf8(exeBackupPath.extension()).append(".backup")));
-	std::error_code ec;
-	if (!fs::exists(exeBackupPath, ec))
-		return;
-	// try to delete update residue, but give up quickly as to not cause a permanent hang
-	// it may succeed on next turn
-	for (sint32 i=0; i<3; i++)
+	// finalize update process
+	// delete update cemu.exe.backup if available
+	const auto filename = ActiveSettings::GetExecutablePath().replace_extension("exe.backup");
+	if (fs::exists(filename))
 	{
-		if (fs::remove(exeBackupPath, ec))
-			break;
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+#if BOOST_OS_WINDOWS
+		HANDLE lock;
+		do
+		{
+			lock = CreateMutexW(nullptr, TRUE, L"Global\\cemu_update_lock");
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		} while (lock == nullptr);
+		const DWORD wait_result = WaitForSingleObject(lock, 2000);
+		CloseHandle(lock);
+
+		if (wait_result == WAIT_OBJECT_0)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			std::error_code ec;
+			fs::remove(filename, ec);
+		}
+#else
+		while (fs::exists(filename))
+		{
+			std::error_code ec;
+			fs::remove(filename, ec);
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		}
+#endif
 	}
 }
 
@@ -231,9 +242,8 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int
 #ifdef HAS_SDL
 	SDL_SetMainReady();
 #endif
-	auto parse_rc = LaunchSettings::HandleCommandline(lpCmdLine);
-	if (parse_rc.has_value())
-		return *parse_rc;
+	if (!LaunchSettings::HandleCommandline(lpCmdLine))
+		return 0;
 	WindowSystem::Create();
 	return 0;
 }
@@ -246,13 +256,13 @@ int main(int argc, char* argv[])
 #ifdef HAS_SDL
 	SDL_SetMainReady();
 #endif
-	auto parse_rc = LaunchSettings::HandleCommandline(argc, argv);
-	if (parse_rc.has_value())
-		return *parse_rc;
+	if (!LaunchSettings::HandleCommandline(argc, argv))
+		return 0;
 	WindowSystem::Create();
 	return 0;
 }
 
+#elif BOOST_PLAT_ANDROID
 #else
 
 int BreathOfTheWildChildProcessMain();
@@ -266,9 +276,8 @@ int main(int argc, char *argv[])
 #if BOOST_OS_LINUX || BOOST_OS_BSD
     XInitThreads();
 #endif
-	auto parse_rc = LaunchSettings::HandleCommandline(argc, argv);
-  if (parse_rc.has_value())
-		return *parse_rc;
+    if (!LaunchSettings::HandleCommandline(argc, argv))
+		return 0;
 	WindowSystem::Create();
 	return 0;
 }

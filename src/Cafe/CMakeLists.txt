@@ -356,6 +356,7 @@ add_library(CemuCafe
   OS/libs/nfc/TLV.cpp
   OS/libs/nfc/TLV.h
   OS/libs/nlibcurl/nlibcurl.cpp
+  OS/libs/nlibcurl/nlibcurlDebug.hpp
   OS/libs/nlibcurl/nlibcurl.h
   OS/libs/nlibnss/nlibnss.cpp
   OS/libs/nlibnss/nlibnss.h
@@ -615,6 +616,16 @@ if(ENABLE_METAL)
         "-framework Metal"
         "-framework QuartzCore"
     )
+endif()
+
+if(ANDROID)
+  target_sources(CemuCafe PRIVATE
+    Filesystem/fscDeviceAndroidSAF.cpp
+    Filesystem/fscDeviceAndroidSAF.h
+  )
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(AARCH64)")
+    target_link_libraries(CemuCafe PRIVATE adrenotools)
+  endif()
 endif()
 
 if(CEMU_ARCHITECTURE MATCHES "(aarch64)|(AARCH64)|(arm64)|(ARM64)")

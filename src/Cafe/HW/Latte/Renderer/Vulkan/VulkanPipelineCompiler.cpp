@@ -126,54 +126,54 @@ PipelineCompiler::~PipelineCompiler()
 		m_renderPassObj->decRef();
 };
 
-VkFormat PipelineCompiler::GetVertexFormat(Latte::E_HWFMT format)
+VkFormat PipelineCompiler::GetVertexFormat(uint8 format)
 {
 	switch (format)
 	{
-	case Latte::E_HWFMT::HWFMT_32_32_32_32_FLOAT:
+	case FMT_32_32_32_32_FLOAT:
 		return VK_FORMAT_R32G32B32A32_UINT;
-	case Latte::E_HWFMT::HWFMT_32_32_32_FLOAT:
+	case FMT_32_32_32_FLOAT:
 		return VK_FORMAT_R32G32B32_UINT;
-	case Latte::E_HWFMT::HWFMT_32_32_FLOAT:
+	case FMT_32_32_FLOAT:
 		return VK_FORMAT_R32G32_UINT;
-	case Latte::E_HWFMT::HWFMT_32_FLOAT:
+	case FMT_32_FLOAT:
 		return VK_FORMAT_R32_UINT;
-	case Latte::E_HWFMT::HWFMT_8_8_8_8:
+	case FMT_8_8_8_8:
 		return VK_FORMAT_R8G8B8A8_UINT;
-	case Latte::E_HWFMT::HWFMT_8_8_8:
+	case FMT_8_8_8:
 		return VK_FORMAT_R8G8B8_UINT;
-	case Latte::E_HWFMT::HWFMT_8_8:
+	case FMT_8_8:
 		return VK_FORMAT_R8G8_UINT;
-	case Latte::E_HWFMT::HWFMT_8:
+	case FMT_8:
 		return VK_FORMAT_R8_UINT;
-	case Latte::E_HWFMT::HWFMT_32_32_32_32:
+	case FMT_32_32_32_32:
 		return VK_FORMAT_R32G32B32A32_UINT;
-	case Latte::E_HWFMT::HWFMT_32_32_32:
+	case FMT_32_32_32:
 		return VK_FORMAT_R32G32B32_UINT;
-	case Latte::E_HWFMT::HWFMT_32_32:
+	case FMT_32_32:
 		return VK_FORMAT_R32G32_UINT;
-	case Latte::E_HWFMT::HWFMT_32:
+	case FMT_32:
 		return VK_FORMAT_R32_UINT;
-	case Latte::E_HWFMT::HWFMT_16_16_16_16:
+	case FMT_16_16_16_16:
 		return VK_FORMAT_R16G16B16A16_UINT; // verified to match OpenGL
-	case Latte::E_HWFMT::HWFMT_16_16_16:
+	case FMT_16_16_16:
 		return VK_FORMAT_R16G16B16_UINT;
-	case Latte::E_HWFMT::HWFMT_16_16:
+	case FMT_16_16:
 		return VK_FORMAT_R16G16_UINT;
-	case Latte::E_HWFMT::HWFMT_16:
+	case FMT_16:
 		return VK_FORMAT_R16_UINT;
-	case Latte::E_HWFMT::HWFMT_16_16_16_16_FLOAT:
+	case FMT_16_16_16_16_FLOAT:
 		return VK_FORMAT_R16G16B16A16_UINT; // verified to match OpenGL
-	case Latte::E_HWFMT::HWFMT_16_16_16_FLOAT:
+	case FMT_16_16_16_FLOAT:
 		return VK_FORMAT_R16G16B16_UINT;
-	case Latte::E_HWFMT::HWFMT_16_16_FLOAT:
+	case FMT_16_16_FLOAT:
 		return VK_FORMAT_R16G16_UINT;
-	case Latte::E_HWFMT::HWFMT_16_FLOAT:
+	case FMT_16_FLOAT:
 		return VK_FORMAT_R16_UINT;
-	case Latte::E_HWFMT::HWFMT_2_10_10_10:
+	case FMT_2_10_10_10:
 		return VK_FORMAT_R32_UINT; // verified to match OpenGL
 	default:
-		cemuLog_log(LogType::Force, "Unsupported vertex format: {:02x}", (uint32)format);
+		cemuLog_log(LogType::Force, "Unsupported vertex format: {:02x}", format);
 		assert_dbg();
 		return VK_FORMAT_UNDEFINED;
 	}
@@ -372,7 +372,6 @@ void PipelineCompiler::InitVertexInputState(const LatteContextRegister& latteReg
 	for (auto& bufferGroup : fetchShader->bufferGroups)
 	{
 		std::optional<LatteConst::VertexFetchType2> fetchType;
-		std::optional<uint32> bufferInstanceDivisor; // instance divisor for this buffer
 
 		for (sint32 j = 0; j < bufferGroup.attribCount; ++j)
 		{
@@ -396,9 +395,8 @@ void PipelineCompiler::InitVertexInputState(const LatteContextRegister& latteReg
 
 			if (attr.fetchType == LatteConst::INSTANCE_DATA)
 			{
-				uint32 divisor = attr.GetInstanceDivisor(latteRegister.GetRawView());
-				cemu_assert_debug(!bufferInstanceDivisor.has_value() || bufferInstanceDivisor == divisor); // Latte can set different divisors per attribute and thus have more than one divisor per buffer, but we don't support this yet
-				bufferInstanceDivisor = divisor;
+				cemu_assert_debug(attr.aluDivisor == 1); // other divisor not yet supported
+				// use VK_EXT_vertex_attribute_divisor
 			}
 		}
 
@@ -423,18 +421,6 @@ void PipelineCompiler::InitVertexInputState(const LatteContextRegister& latteReg
 		}
 		entry.binding = bufferIndex;
 		vertexInputBindingDescription.emplace_back(entry);
-
-		if (bufferInstanceDivisor.has_value() && entry.inputRate == VK_VERTEX_INPUT_RATE_INSTANCE && bufferStride != 0 && bufferInstanceDivisor != 1)
-		{
-			uint32 instanceDivisor = *bufferInstanceDivisor;
-			auto vkRenderer = VulkanRenderer::GetInstance();
-			if (instanceDivisor == 0 || instanceDivisor > 0xFFFF || !vkRenderer->m_featureControl.deviceExtensions.vertex_attribute_divisor)
-			{
-				cemuLog_log(LogType::Force, "Vulkan: Unsupported vertex attribute divisor {}", instanceDivisor);
-			}
-			else
-				m_vertexInputBindingDivisors.push_back({bufferIndex, instanceDivisor});
-		}
 	}
 
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -442,13 +428,6 @@ void PipelineCompiler::InitVertexInputState(const LatteContextRegister& latteReg
 	vertexInputInfo.pVertexBindingDescriptions = vertexInputBindingDescription.data();
 	vertexInputInfo.vertexAttributeDescriptionCount = vertexInputAttributeDescription.size();
 	vertexInputInfo.pVertexAttributeDescriptions = vertexInputAttributeDescription.data();
-	if (!m_vertexInputBindingDivisors.empty())
-	{
-		m_vertexInputDivisorState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO_KHR;
-		m_vertexInputDivisorState.vertexBindingDivisorCount = static_cast<uint32>(m_vertexInputBindingDivisors.size());
-		m_vertexInputDivisorState.pVertexBindingDivisors = m_vertexInputBindingDivisors.data();
-		vertexInputInfo.pNext = &m_vertexInputDivisorState;
-	}
 }
 
 void PipelineCompiler::InitInputAssemblyState(const Latte::LATTE_VGT_PRIMITIVE_TYPE::E_PRIMITIVE_TYPE primitiveMode)

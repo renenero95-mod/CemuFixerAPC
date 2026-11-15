@@ -64,7 +64,7 @@ struct LatteDecompilerTEXInstruction
 	{
 		uint32 arrayBase{};
 		sint8 srcSelX{};
-		Latte::E_HWFMT format{};
+		uint32 format{};
 		uint8 nfa{};
 		uint8 isSigned{};
 	}memRead;

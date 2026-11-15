@@ -1,4 +1,5 @@
 add_library(CemuUtil
+  boost/bluetooth.h
   bootSound/BootSoundReader.cpp
   bootSound/BootSoundReader.h
   ChunkedHeap/ChunkedHeap.h
@@ -37,7 +38,7 @@ add_library(CemuUtil
   helpers/StringParser.h
   helpers/SystemException.h
   helpers/TempState.h
-  helpers/ZipArchive.h
+  helpers/ZArchiveHelpers.h
   highresolutiontimer/HighResolutionTimer.cpp
   highresolutiontimer/HighResolutionTimer.h
   ImageWriter/bmp.h
@@ -49,8 +50,6 @@ add_library(CemuUtil
   math/vector2.h
   math/vector3.h
   MemMapper/MemMapper.h
-  Socket/Socket.cpp
-  Socket/Socket.h
   SystemInfo/SystemInfo.cpp
   SystemInfo/SystemInfo.h
   ThreadPool/ThreadPool.h
@@ -76,7 +75,12 @@ if(WIN32)
 	target_sources(CemuUtil PRIVATE MemMapper/MemMapperWin.cpp)
 	target_sources(CemuUtil PRIVATE SystemInfo/SystemInfoWin.cpp)
 elseif(UNIX)
-	target_sources(CemuUtil PRIVATE Fiber/FiberUnix.cpp)
+  if(ANDROID)
+    target_sources(CemuUtil PRIVATE Fiber/FiberFContext.cpp)
+    target_link_libraries(CemuUtil PRIVATE Boost::context)
+  else()
+    target_sources(CemuUtil PRIVATE Fiber/FiberUContext.cpp)
+  endif()
 	target_sources(CemuUtil PRIVATE MemMapper/MemMapperUnix.cpp)
 	target_sources(CemuUtil PRIVATE SystemInfo/SystemInfoUnix.cpp)
 	if(NOT APPLE)

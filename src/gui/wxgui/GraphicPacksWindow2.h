@@ -28,8 +28,6 @@ private:
 	bool m_filter_installed_games;
 	std::vector<uint64_t> m_installed_games;
 
-	void UpdateAppearance();
-	void UpdateOptionsLayout();
 	void ClearPresets();
 	void FillGraphicPackList() const;
 	void GetChildren(const wxTreeItemId& id, std::vector<wxTreeItemId>& children) const;
@@ -53,6 +51,7 @@ private:
 	wxInfoBar* m_info_bar;
 
 	GraphicPackPtr m_shown_graphic_pack;
+	std::string m_gp_name, m_gp_description;
 
 	float m_ratio = 0.55f;
 	wxColour m_default_colour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);

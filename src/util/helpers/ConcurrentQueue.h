@@ -44,12 +44,12 @@ public:
 		return m_queue.front();
 	}
 
-	bool try_pop(T& item)
+	bool peek2(T& item)
 	{
 		std::unique_lock<std::mutex> mlock(m_mutex);
 		if (m_queue.empty())
 			return false;
-		item = std::move(m_queue.front());
+		item = m_queue.front();
 		m_queue.pop();
 		return true;
 	}

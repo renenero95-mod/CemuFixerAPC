@@ -31,6 +31,9 @@ namespace CafeSystem
 	void LaunchForegroundTitle();
 	bool IsTitleRunning();
 
+	void PauseTitle();
+	void ResumeTitle();
+
 	bool GetOverrideArgStr(std::vector<std::string>& args);
 	void SetOverrideArgs(std::span<std::string> args);
 	void UnsetOverrideArgs();
@@ -55,10 +58,10 @@ namespace CafeSystem
 
 	uint32 GetRPXHashBase();
 	uint32 GetRPXHashUpdated();
+
 	void RequestRecreateCanvas();
 	void NotifyPPCProcessExit(sint32 status);
 
-	void DumpCurrentRPX();
 };
 
 extern RPLModule* applicationRPX;
