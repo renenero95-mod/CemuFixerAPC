@@ -8,7 +8,7 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-while IFS=$'\\t' read -r path url commit; do
+while IFS=$'\t' read -r path url commit; do
   [[ -z "${path:-}" || "$path" == \#* ]] && continue
   [[ -n "${url:-}" && -n "${commit:-}" ]] || {
     echo "Pin submodule non valido: $path" >&2
